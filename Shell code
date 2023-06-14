@@ -1,0 +1,36 @@
+  staging-merge:
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'Gallopsled' && github.event_name == 'push' && startsWith(github.event.ref, 'refs/heads/') && endsWith(github.event.ref, '-staging')
+    needs: test
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 20
+    - name: Push changes to protected branch
+      env:
+        GITHUB_REF: ${{ github.event.ref }}
+      run: |
+        BRANCH=${GITHUB_REF#refs/heads/}
+        TARGET=${BRANCH%-staging}
+        git branch -f "$TARGET"
+        git push origin "$TARGET"
+        git push origin --delete "$BRANCH"
+
+  pypi:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
+    permissions:
+      id-token: write
+    needs: test
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: packages
+        path: dist
+
+    - name: Publish package
+      uses: pypa/gh-action-pypi-publish@release/v1
+
+    - if: failure()
+      run: ls -R
